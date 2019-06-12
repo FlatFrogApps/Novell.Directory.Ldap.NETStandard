@@ -30,8 +30,8 @@
 //
 
 using System;
+using System.Diagnostics;
 using System.Reflection;
-using Microsoft.Extensions.Logging;
 using Novell.Directory.Ldap.Rfc2251;
 
 namespace Novell.Directory.Ldap
@@ -622,7 +622,7 @@ namespace Novell.Directory.Ldap
             {
                 // No match with the OID
                 // Do nothing. Fall through and construct a default LDAPControl object.
-                Logger.Log.LogWarning("Exception swallowed", ex);
+                Debug.WriteLine("Exception swallowed", ex);
             }
             // If we get here we did not have a registered response control
             // for this oid.  Return a default LDAPControl object.

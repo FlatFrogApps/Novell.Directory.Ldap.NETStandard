@@ -30,8 +30,8 @@
 //
 
 using System;
+using System.Diagnostics;
 using System.Threading;
-using Microsoft.Extensions.Logging;
 using Novell.Directory.Ldap.Rfc2251;
 using Novell.Directory.Ldap.Utilclass;
 
@@ -331,7 +331,7 @@ namespace Novell.Directory.Ldap
                 }
                 catch (LdapException ex)
                 {
-                    Logger.Log.LogWarning("Exception swallowed", ex);
+                    Debug.WriteLine("Exception swallowed", ex);
                 }
                 // If not informing user, remove message from agent
                 if (informUserEx == null)
@@ -383,7 +383,7 @@ namespace Novell.Directory.Ldap
             }
             catch (Exception ex)
             {
-                Logger.Log.LogWarning("Exception swallowed", ex);
+                Debug.WriteLine("Exception swallowed", ex);
             }
             _stackTraceCleanup = Environment.StackTrace;
             // Let GC clean up this stuff, leave name in case finalized is called
@@ -428,8 +428,7 @@ namespace Novell.Directory.Ldap
                         {
                             if (conn == null)
                             {
-                                var logger = Logger.Factory.CreateLogger<Message>();
-                                logger.LogError("Null connection; creation stack {0}, cleanup stack {1}",
+                                Debug.WriteLine("Null connection; creation stack {0}, cleanup stack {1}",
                                     _stackTraceCreation, _stackTraceCleanup);
                             }
 

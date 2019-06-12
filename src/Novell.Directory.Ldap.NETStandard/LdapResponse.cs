@@ -30,7 +30,7 @@
 //
 
 using System;
-using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 using Novell.Directory.Ldap.Asn1;
 using Novell.Directory.Ldap.Rfc2251;
 using Novell.Directory.Ldap.Utilclass;
@@ -142,7 +142,7 @@ namespace Novell.Directory.Ldap
                         }
                         catch (UriFormatException mex)
                         {
-                            Logger.Log.LogWarning("Exception swallowed", mex);
+                            Debug.WriteLine("Exception swallowed", mex);
                         }
                         finally
                         {

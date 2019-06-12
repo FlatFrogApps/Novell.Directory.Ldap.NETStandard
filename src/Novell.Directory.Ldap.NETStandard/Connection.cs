@@ -31,6 +31,7 @@
 
 using System;
 using System.Collections;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -42,6 +43,8 @@ using System.Threading;
 using Novell.Directory.Ldap.Asn1;
 using Novell.Directory.Ldap.Rfc2251;
 using Novell.Directory.Ldap.Utilclass;
+using Windows.Networking;
+using Windows.Networking.Sockets;
 
 namespace Novell.Directory.Ldap
 {
@@ -251,9 +254,12 @@ namespace Novell.Directory.Ldap
         * if nonTLSBackup is null then startTLS has not been called,
         * or stopTLS has been called to end TLS protection
         */
-        private Socket sock;
-        private TcpClient socket;
-        private TcpClient nonTLSBackup;
+
+        private StreamSocket socket;
+
+        //private Socket sock;
+        //private TcpClient socket;
+        //private TcpClient nonTLSBackup;
 
         private Stream in_Renamed;
         private Stream out_Renamed;
@@ -580,42 +586,21 @@ namespace Novell.Directory.Ldap
                 {
                     if (in_Renamed == null || out_Renamed == null)
                     {
-                        if (Ssl)
-                        {
-                            this.host = host;
-                            this.port = port;
-                            sock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.IP);
-                            var ipAddresses = Dns.GetHostAddressesAsync(host).Result;
-                            var hostadd = ipAddresses.First(ip => ip.AddressFamily == AddressFamily.InterNetwork);
-                            var ephost = new IPEndPoint(hostadd, port);
-                            sock.Connect(ephost);
-                            var nstream = new NetworkStream(sock, true);
+                        this.host = host;
+                        this.port = port;
+                        socket = new StreamSocket();
+                        socket.ConnectAsync(new HostName(host), port.ToString(), Ssl ? SocketProtectionLevel.Tls12 : SocketProtectionLevel.PlainSocket).AsTask().WaitAndUnwrap(5000);
 
-                            var sslstream = new SslStream(
-                                nstream,
-                                false,
-                                RemoteCertificateValidationCallback
-                            );
-                            sslstream.AuthenticateAsClientAsync(host).WaitAndUnwrap(connectionTimeout);
-                            in_Renamed = sslstream;
-                            out_Renamed = sslstream;
-                        }
-                        else
-                        {
-                            socket = new TcpClient();
-                            socket.ConnectAsync(host, port).WaitAndUnwrap(connectionTimeout);
-                            in_Renamed = socket.GetStream();
-                            out_Renamed = socket.GetStream();
-                        }
+                        in_Renamed = socket.InputStream.AsStreamForRead();
+                        out_Renamed = socket.OutputStream.AsStreamForWrite();
                     }
                     else
                     {
-                        Console.WriteLine("connect input/out Stream specified");
+                        Debug.WriteLine("connect input/out Stream specified");
                     }
                 }
                 catch (SocketException se)
                 {
-                    sock = null;
                     socket = null;
                     throw new LdapException(ExceptionMessages.CONNECTION_ERROR, new object[] {host, port},
                         LdapException.CONNECT_ERROR, null, se);
@@ -623,7 +608,6 @@ namespace Novell.Directory.Ldap
 
                 catch (IOException ioe)
                 {
-                    sock = null;
                     socket = null;
                     throw new LdapException(ExceptionMessages.CONNECTION_ERROR, new object[] {host, port},
                         LdapException.CONNECT_ERROR, null, ioe);
@@ -877,7 +861,7 @@ namespace Novell.Directory.Ldap
                     }
                 }
                 bindProperties = null;
-                if (socket != null || sock != null)
+                if (socket != null)
                 {
                     // Just before closing the sockets, abort the reader thread
                     if (reader != null && reason != "reader: thread stopping")
@@ -887,21 +871,13 @@ namespace Novell.Directory.Ldap
                     {
                         in_Renamed?.Dispose();
                         out_Renamed?.Dispose();
-                        if (Ssl)
-                        {
-                            sock.Dispose();
-                        }
-                        else
-                        {
-                            socket.Dispose();
-                        }
+                        socket.Dispose();
                     }
                     catch (IOException)
                     {
                         // ignore problem closing socket
                     }
                     socket = null;
-                    sock = null;
                     in_Renamed = null;
                     out_Renamed = null;
                 }
@@ -986,7 +962,7 @@ namespace Novell.Directory.Ldap
         /// </summary>
         internal bool TLS
         {
-            get { return nonTLSBackup != null; }
+            get { return socket.Information.ProtectionLevel != SocketProtectionLevel.PlainSocket; }
         }
 
         /// <summary>
@@ -1005,26 +981,27 @@ namespace Novell.Directory.Ldap
             try
             {
                 waitForReader(null);
-                nonTLSBackup = socket;
-                var sslstream = new SslStream(
-                    socket.GetStream(),
-                    true,
-                    RemoteCertificateValidationCallback
-                );
-                sslstream.AuthenticateAsClientAsync(host).WaitAndUnwrap(connectionTimeout);
-                in_Renamed = sslstream;
-                out_Renamed = sslstream;
+                //nonTLSBackup = socket;
+                //var sslstream = new SslStream(
+                //    socket.GetStream(),
+                //    true,
+                //    RemoteCertificateValidationCallback
+                //);
+                //sslstream.AuthenticateAsClientAsync(host).WaitAndUnwrap(connectionTimeout);
+                //in_Renamed = sslstream;
+                //out_Renamed = sslstream;
+                socket.UpgradeToSslAsync(SocketProtectionLevel.Tls12, new HostName(host)).AsTask().WaitAndUnwrap(5000);
                 startReader();
             }
             catch (IOException ioe)
             {
-                nonTLSBackup = null;
+                //nonTLSBackup = null;
                 throw new LdapException("Could not negotiate a secure connection", LdapException.CONNECT_ERROR, null,
                     ioe);
             }
             catch (Exception uhe)
             {
-                nonTLSBackup = null;
+                //nonTLSBackup = null;
                 throw new LdapException("The host is unknown", LdapException.CONNECT_ERROR, null, uhe);
             }
         }
@@ -1057,14 +1034,15 @@ namespace Novell.Directory.Ldap
             try
             {
                 stopReaderMessageID = STOP_READING;
-                out_Renamed?.Dispose();
-                in_Renamed?.Dispose();
+                //out_Renamed?.Dispose();
+                //in_Renamed?.Dispose();
                 //				this.sock.Shutdown(SocketShutdown.Both);
                 //				this.sock.Close();
                 waitForReader(null);
-                socket = nonTLSBackup;
-                in_Renamed = socket.GetStream();
-                out_Renamed = socket.GetStream();
+                //socket = nonTLSBackup;
+                //in_Renamed = socket.GetStream();
+                //out_Renamed = socket.GetStream();
+                socket.UpgradeToSslAsync(SocketProtectionLevel.PlainSocket, new HostName(host)).AsTask().WaitAndUnwrap(5000);
                 // Allow the new reader to start
                 stopReaderMessageID = CONTINUE_READING;
             }
@@ -1074,7 +1052,7 @@ namespace Novell.Directory.Ldap
             }
             finally
             {
-                nonTLSBackup = null;
+                //nonTLSBackup = null;
             }
         }
 

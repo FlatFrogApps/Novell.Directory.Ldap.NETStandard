@@ -30,6 +30,7 @@
 //
 
 using System;
+using System.Diagnostics;
 using System.Threading;
 using Novell.Directory.Ldap.Utilclass;
 
@@ -219,7 +220,7 @@ namespace Novell.Directory.Ldap
             }
             catch (FieldAccessException ex)
             {
-                Logger.Log.LogWarning("Exception swallowed", ex);
+                Debug.WriteLine("Exception swallowed", ex);
             }
         }
 
@@ -257,7 +258,7 @@ namespace Novell.Directory.Ldap
             catch (FieldAccessException ex)
             {
                 // return true, if no message, it must be complete
-                Logger.Log.LogWarning("Exception swallowed", ex);
+                Debug.WriteLine("Exception swallowed", ex);
             }
             return true;
         }
